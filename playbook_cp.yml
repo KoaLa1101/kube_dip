@@ -1,0 +1,49 @@
+- name: Установка пакетов на control-plane узле
+  hosts: all
+  become: true
+  vars:
+    kubernetes_version: "{{ kubernetes_version }}"
+    os: "{{ os }}"
+  tasks:
+    - name: Отключение SELinux
+      selinux:
+        policy: targeted
+        state: disabled
+
+    - name: Установка зависимостей
+      package:
+        name: ["docker", "iptables", "net-tools", "epel-release", "vim", "git", "curl", "wget"]
+        state: present
+      when: "'CentOs' in os or 'Red Hat' in os"
+
+    - name: Установка зависимостей
+      package:
+        name: ["docker.io", "iptables", "net-tools", "vim", "git", "curl", "wget"]
+        state: present
+      when: "'Ubuntu' in os or 'Debian' in os"
+
+    - name: Установка kubectl
+      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubectl={{ kubernetes_version }}"
+      when: "'Ubuntu' in os or 'Debian' in os"
+
+    - name: Установка kubeadm, kubelet и kubectl
+      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubeadm={{ kubernetes_version }} kubelet={{ kubernetes_version }} kubectl={{ kubernetes_version }}"
+      when: "'CentOs' in os or 'Red Hat' in os"
+
+    - name: Инициализация кластера Kubernetes
+      command: "kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint={{ control_plane_endpoint }} --upload-certs --ignore-preflight-errors=all"
+      args:
+        creates: /etc/kubernetes/admin.conf
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: kubeadm_init
+      when: "'CentOs' in os or 'Red Hat' in os"
+
+    - name: Копирование файла конфигурации Kubernetes
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/{{ ansible_user }}/.kube/config
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: 0644
+      when: kubeadm_init is changed

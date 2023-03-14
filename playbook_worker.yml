@@ -1,0 +1,26 @@
+- name: Установка пакетов на worker узлах
+  hosts: all
+  become: true
+  vars:
+    kubernetes_version: "{{ kubernetes_version }}"
+    os: "{{ os }}"
+  tasks:
+    - name: Установка зависимостей
+      package:
+        name: ["docker", "iptables", "net-tools", "epel-release", "vim", "git", "curl", "wget"]
+        state: present
+      when: "'CentOs' in os or 'Red Hat' in os"
+
+    - name: Установка зависимостей
+      package:
+        name: ["docker.io", "iptables", "net-tools", "vim", "git", "curl", "wget"]
+        state: present
+      when: "'Ubuntu' in os or 'Debian' in os"
+
+    - name: Установка kubeadm, kubelet и kubectl
+      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubeadm={{ kubernetes_version }} kubelet={{ kubernetes_version }} kubectl={{ kubernetes_version }}"
+      when: "'CentOs' in os or 'Red Hat' in os"
+
+    - name: Установка kubectl
+      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubectl={{ kubernetes_version }}"
+      when: "'Ubuntu' in os or 'Debian' in os"

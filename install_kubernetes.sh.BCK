@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Получение аргументов командной строки
+CP_ADDRESSES=$1
+WORKER_ADDRESSES=$2
+VERSION=$3
+OS=$4
+
+# Установка пакетов на control-plane узлах
+ansible-playbook -i "${CP_ADDRESSES}," -e "k8s_version=${VERSION} os=${OS}" playbook_cp.yml
+
+# Установка пакетов на worker узлах
+ansible-playbook -i "${WORKER_ADDRESSES}," -e "k8s_version=${VERSION} os=${OS}" playbook_worker.yml
