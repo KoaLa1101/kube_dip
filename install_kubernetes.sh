@@ -45,16 +45,97 @@ else
 fi
 
 # Установка пакетов для control-plane узлов
-for ADDRESS in $CP_ADDRESSES; do
-    echo "Установка пакетов на $ADDRESS"
+if [ ${#CP_ADDRESSES[@]} -eq 3 ]; then
+    for ADDRESS in ${CP_ADDRESSES[@]}; do
+        echo "Установка пакетов на $ADDRESS"
 
-    # Отключение SELinux и Firewall
-    ssh root@$ADDRESS "$SELINUX_CMD"
-    ssh root@$ADDRESS "$FIREWALL_CMD"
+        # Отключение SELinux и Firewall
+        ssh root@$ADDRESS "$SELINUX_CMD"
+        ssh root@$ADDRESS "$FIREWALL_CMD"
 
-    # Установка пакетов
-    ssh root@$ADDRESS "yum install -y ${KUBE_PACKAGES[@]}"
-done
+        # Установка пакетов
+        if [ "$OS" == "CentOS" ]; then
+            ssh root@$ADDRESS "yum install -y ${KUBE_PACKAGES[@]}"
+        else
+            ssh root@$ADDRESS "apt-get update -y && apt-get install -y ${KUBE_PACKAGES[@]}"
+        fi
+
+        # Настройка haproxy и keepalived
+        ssh root@$ADDRESS "echo '
+        global
+            log /dev/log    local0
+            log /dev/log    local1 notice
+            chroot /var/lib/haproxy
+            stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+            stats timeout 30s
+            user haproxy
+            group haproxy
+            daemon
+            maxconn 256
+
+        defaults
+            log global
+            mode    tcp
+            option  tcplog
+            option  dontlognull
+            timeout connect 5000
+            timeout client  50000
+            timeout server  50000
+
+        frontend kubernetes-api
+            bind *:6443
+            mode tcp
+            default_backend kubernetes-control-plane
+
+        backend kubernetes-control-plane
+            mode tcp
+            balance roundrobin
+            option ssl-hello-chk
+            server k8s-master-1 ${CP_ADDRESSES[0]}:6443 check
+            server k8s-master-2 ${CP_ADDRESSES[1]}:6443 check
+            server k8s-master-3 ${CP_ADDRESSES[2]}:6443 check
+        ' > /etc/haproxy/haproxy.cfg"
+
+        ssh root@$ADDRESS "systemctl enable haproxy && systemctl start haproxy"
+        ssh root@$ADDRESS "echo '
+        net.ipv4.ip_nonlocal_bind=1
+        net.ipv4.conf.all.rp_filter=0
+        net.ipv4.conf.default.rp_filter=0
+        ' >> /etc/sysctl.conf && sysctl -p"
+
+        ssh root@$ADDRESS "echo '
+        vrrp_script chk_haproxy {
+            script \"killall -0 haproxy\"
+            interval 2
+        }
+
+        vrrp_instance VI_1 {
+            interface eth0
+            virtual_router_id 51
+            priority 200
+            advert_int 1
+            unicast_src_ip $ADDRESS
+            unicast_peer {
+                ${CP_ADDRESSES[0]}
+                ${CP_ADDRESSES[1]}
+                ${CP_ADDRESSES[2]}
+            }
+            authentication {
+                auth_type PASS
+                auth_pass password
+            }
+            track_script {
+                chk_haproxy
+            }
+            virtual_ipaddress {
+                $ADDRESS
+            }
+        }
+        ' > /etc/keepalived/keepalived.conf"
+
+        ssh root@$ADDRESS "systemctl enable keepalived && systemctl start keepalived"
+    done
+fi
 
 # Установка пакетов для worker узлов
 for ADDRESS in $WORKER_ADDRESSES; do
@@ -65,5 +146,26 @@ for ADDRESS in $WORKER_ADDRESSES; do
     ssh root@$ADDRESS "$FIREWALL_CMD"
 
     # Установка пакетов
-    ssh root@$ADDRESS "yum install -y ${KUBE_PACKAGES[@]}"
+    if [ "$OS" == "CentOS" ]; then
+        ssh root@$ADDRESS "yum install -y ${KUBE_WORKER_PACKAGES[@]}"
+    else
+        ssh root@$ADDRESS "apt-get update -y && apt-get install -y ${KUBE_WORKER_PACKAGES[@]}"
+    fi
+
+    # Настройка kubelet
+    ssh root@$ADDRESS "echo '
+    apiVersion: kubelet.config.k8s.io/v1beta1
+    kind: KubeletConfiguration
+    cgroupDriver: systemd
+    ' > /etc/kubernetes/kubelet-config.yaml"
+
+    ssh root@$ADDRESS "echo '
+    KUBELET_EXTRA_ARGS=--config=/etc/kubernetes/kubelet-config.yaml
+    ' > /etc/default/kubelet"
+
+    # Запуск kubelet
+    ssh root@$ADDRESS "systemctl enable kubelet && systemctl start kubelet"
 done
+
+echo "Установка завершена"
+zenity --info --text="Пакеты установлены"
