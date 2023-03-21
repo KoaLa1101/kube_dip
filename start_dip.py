@@ -25,11 +25,14 @@ class MainWindow(QWidget):
         self.combo_box_version.addItem("1.25.3")
         self.combo_box_version.addItem("1.25.4")
         self.combo_box_version.addItem("1.26.1")
+        self.label_vip = QLabel("Виртуальный IP-адрес")
+        self.line_edit_vip = QLineEdit()
         self.label_os = QLabel("Операционная система")
         self.combo_box_os = QComboBox()
         self.combo_box_os.addItem("CentOS")
         self.combo_box_os.addItem("Debian")
         self.combo_box_os.addItem("Ubuntu")
+        self.combo_box_os.addItem("AlmaLinux")
         self.button_confirm_count = QPushButton("Подтвердить количество")
         self.button_start = QPushButton("Начать")
 
@@ -48,6 +51,8 @@ class MainWindow(QWidget):
         vbox_left.addLayout(form_layout)
 
         vbox_right = QVBoxLayout()
+        vbox_right.addWidget(self.label_vip)
+        vbox_right.addWidget(self.line_edit_vip)
         vbox_right.addLayout(grid_layout)
         vbox_right.addWidget(self.button_confirm_count)
         vbox_right.addWidget(self.button_start)
@@ -101,6 +106,7 @@ class MainWindow(QWidget):
             line_edit = QLineEdit()
             self.worker_fields.append((label, line_edit))
 
+
         # Обновление макета
         layout_left = self.layout().itemAt(0).layout()
         form_layout = layout_left.itemAt(0).layout()
@@ -116,8 +122,9 @@ class MainWindow(QWidget):
         worker_addresses = [field[1].text() for field in self.worker_fields]
         version = self.combo_box_version.currentText()
         os = self.combo_box_os.currentText()
+        vip = self.line_edit_vip.text()
 
-        # Вывод в консоль IP-адресов, операционной системы и версии Kubernetes
+        # Вывод в консоль IP-адресов, операционной системы, версии Kubernetes и виртуальный айпи адрес
         print("Control-plane адреса:")
         for address in cp_addresses:
             print(address)
@@ -126,6 +133,7 @@ class MainWindow(QWidget):
             print(address)
         print(f"Операционная система: {os}")
         print(f"Версия Kubernetes: {version}")
+        print(f"Virtual Ip Address : {vip}")
 
         # Вывод всплывающего окна перед запуском скрипта
         msg_box = QMessageBox()
@@ -135,7 +143,7 @@ class MainWindow(QWidget):
 
         # Запуск скрипта установки пакетов в отдельном потоке
         def run_script():
-            command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}'"
+            command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
             subprocess.run(command, shell=True)
 
             # Вывод всплывающего окна после завершения работы скрипта
@@ -152,5 +160,6 @@ class MainWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
+    window.setGeometry(500, 300, 800, 200)
     window.show()
     sys.exit(app.exec_())

@@ -1,26 +1,179 @@
-- name: Установка пакетов на worker узлах
-  hosts: all
+---
+- hosts: all
+  gather_facts: yes
   become: true
   vars:
-    kubernetes_version: "{{ kubernetes_version }}"
-    os: "{{ os }}"
+    k8s_version: "{{ k8s_version }}"
+    kube_os: "{{ os }}"
   tasks:
-    - name: Установка зависимостей
-      package:
-        name: ["docker", "iptables", "net-tools", "epel-release", "vim", "git", "curl", "wget"]
+    - name: Show distribution
+      debug:
+        var: ansible_distribution
+    - name: Download GPG key for Kubernetes Centos
+      get_url:
+        url: https://packages.cloud.google.com/yum/doc/yum-key.gpg
+        dest: /tmp/yum-key.gpg
+    - name: Import GPG key for Kubernetes Centos
+      rpm_key:
+        key: /tmp/yum-key.gpg
         state: present
-      when: "'CentOs' in os or 'Red Hat' in os"
-
-    - name: Установка зависимостей
-      package:
-        name: ["docker.io", "iptables", "net-tools", "vim", "git", "curl", "wget"]
+    - name: Import Kubernetes GPG key Deb
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
         state: present
-      when: "'Ubuntu' in os or 'Debian' in os"
+      when: ansible_distribution in ['Debian', 'Ubuntu']
+    - name: Add Docker repository
+      yum_repository:
+        name: docker-ce
+        description: Docker CE Stable - $basearch
+        baseurl: https://download.docker.com/linux/centos/7/$basearch/stable
+        gpgcheck: true
+        enabled: true
+        gpgkey: https://download.docker.com/linux/centos/gpg
+      when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
 
-    - name: Установка kubeadm, kubelet и kubectl
-      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubeadm={{ kubernetes_version }} kubelet={{ kubernetes_version }} kubectl={{ kubernetes_version }}"
-      when: "'CentOs' in os or 'Red Hat' in os"
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable
+        state: present
+        filename: docker-ce
+        mode: 0644
+        keyserver: hkp://keyserver.ubuntu.com:80
+        key_id: 7EA0A9C3F273FCD8
+      when: ansible_distribution in ['Debian', 'Ubuntu']
+    - name: Add Kubernetes repository
+      yum_repository:
+        name: kubernetes
+        description: Kubernetes repository
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el{{ kube_os | regex_replace('^CentOS$', '7') }}-x86_64
+        enabled: 1
+        gpgcheck: 1
+        repo_gpgcheck: 0
+      when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
+      tags: repo
 
-    - name: Установка kubectl
-      command: "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && echo 'deb https://apt.kubernetes.io/ kubernetes-xenial main' | tee /etc/apt/sources.list.d/kubernetes.list && apt-get update && apt-get install -y kubectl={{ kubernetes_version }}"
-      when: "'Ubuntu' in os or 'Debian' in os"
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-{{ kube_os }} main
+        keyserver: keyserver.ubuntu.com
+        state: present
+      when: ansible_distribution in ['Debian', 'Ubuntu']
+      tags: repo
+
+    - name: Install Kubernetes packages
+      block:
+        - name: Install CentOS dependencies
+          yum:
+            name:
+              - containerd.io
+              - docker-ce
+              - iptables
+              - net-tools
+              - epel-release
+              - vim
+              - git
+              - curl
+            state: present
+          when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
+          tags: centos_dependencies
+
+        - name: Install Debian/Ubuntu dependencies
+          apt:
+            name:
+              - docker.io
+              - iptables
+              - net-tools
+              - software-properties-common
+              - vim
+              - git
+              - curl
+            state: present
+          when: ansible_distribution in ['Debian', 'Ubuntu']
+          tags: debian_dependencies
+
+        - name: Install Kubernetes packages
+          block:
+            - name: Install CentOS Kubernetes packages
+              yum:
+                name:
+                  - kubeadm-{{ kube_version }}
+                  - kubelet-{{ kube_version }}
+                  - kubectl-{{ kube_version }}
+                state: present
+                disable_gpg_check: yes
+              when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux'] and kube_version is defined
+              tags: centos_kubernetes
+
+            - name: Install CentOS Kubernetes packages without version
+              yum:
+                name:
+                  - kubeadm
+                  - kubelet
+                  - kubectl
+                state: present
+                disable_gpg_check: yes
+              when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux'] and kube_version is not defined
+              tags: centos_kubernetes_no_version
+
+            - name: Install Debian/Ubuntu Kubernetes packages
+              apt:
+                name:
+                  - kubeadm={{ kube_version }}
+                  - kubelet={{ kube_version }}
+                  - kubectl={{ kube_version }}
+                state: present
+              when: ansible_distribution in ['Debian', 'Ubuntu']
+              tags: debian_kubernetes
+
+      tags: kubernetes
+
+    - name: Set vm.swappiness to 0
+      sysctl:
+        name: vm.swappiness
+        value: 0
+        state: present
+
+    - name: Swap off
+      command: swapoff -a
+      ignore_errors: true
+
+    - name: Remove swap from fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^/dev/mapper/.*swap.*$'
+        replace: '#/dev/mapper/swap  swap  swap  defaults  0  0'
+
+    - name: Disable SELinux
+      selinux:
+        policy: targeted
+        state: disabled
+      when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
+      tags: selinux
+
+    - name: Disable firewall
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+      when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
+      tags: firewall
+
+    - name: Comment out disabled_plugins line in /etc/containerd/config.toml
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^disabled_plugins'
+        line: '#disabled_plugins = ["cri"]'
+        state: present
+        backup: true
+
+
+    - name: Start and enable services
+      become: true
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      with_items:
+        - docker
+        - kubelet
+

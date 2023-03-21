@@ -3,13 +3,8 @@
   gather_facts: yes
   become: true
   vars:
-    k8s_version: "{{ k8s_version }}"
-    kube_os: "{{ os }}"
-    virtual_ip: "{{ virtual_ip }}"
-    haproxy_packages:
-      - haproxy
-    keepalived_packages:
-      - keepalived
+    kube_version: "{{ kube_version }}"
+    kube_os: "{{ kube_os }}"
   tasks:
     - name: Show distribution
       debug:
@@ -132,22 +127,6 @@
 
       tags: kubernetes
 
-    - name: Set vm.swappiness to 0
-      sysctl:
-        name: vm.swappiness
-        value: 0
-        state: present
-
-    - name: Swap off
-      command: swapoff -a
-      ignore_errors: true
-
-    - name: Remove swap from fstab
-      replace:
-        path: /etc/fstab
-        regexp: '^/dev/mapper/.*swap.*$'
-        replace: '#/dev/mapper/swap  swap  swap  defaults  0  0'
-
     - name: Disable SELinux
       selinux:
         policy: targeted
@@ -162,47 +141,4 @@
         enabled: no
       when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
       tags: firewall
-
-    - name: Install haproxy and keepalived CentOS
-      when: ansible_distribution in ['CentOS', 'RedHat', 'AlmaLinux']
-      yum:
-        name: "{{ haproxy_packages + keepalived_packages }}"
-        state: present
-
-    - name: Установка haproxy и keepalived на Ubuntu
-      when: ansible_distribution in ['Debian', 'Ubuntu']
-      apt:
-        name: "{{ haproxy_packages + keepalived_packages }}"
-        state: present
-
-    - name: Generate config haproxy
-      template:
-        src: templates/haproxy.cfg.j2
-        dest: /etc/haproxy/haproxy.cfg
-
-    - name: Generate config keepalived
-      template:
-        src: templates/keepalived.conf.j2
-        dest: /etc/keepalived/keepalived.conf
-
-    - name: Comment out disabled_plugins line in /etc/containerd/config.toml
-      lineinfile:
-        path: /etc/containerd/config.toml
-        regexp: '^disabled_plugins'
-        line: '#disabled_plugins = ["cri"]'
-        state: present
-        backup: true
-
-
-    - name: Start and enable services
-      become: true
-      systemd:
-        name: "{{ item }}"
-        state: started
-        enabled: yes
-      with_items:
-        - docker
-        - kubelet
-        - haproxy
-        - keepalived
 
