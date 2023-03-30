@@ -12,7 +12,6 @@ ansible-playbook -i "${first_cp_address}," init_k8s_master.yml --extra-vars "vip
 # Обход всех остальных серверов из списка cp_addresses и добавление их как control plane
 # shellcheck disable=SC2128
 for ip in $(echo "$cp_addresses" | tr ',' ' '); do
-  echo "$ip"
   if [[ "$ip" != "$first_cp_address" ]]; then
   ansible-playbook -i "${ip}," join_control_plane.yml --become-user=root -v
   fi
