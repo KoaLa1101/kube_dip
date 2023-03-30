@@ -1,0 +1,56 @@
+---
+- name: Initialize Kubernetes Master
+  hosts: all
+  become: true
+  vars:
+      free_port: 9011
+  tasks:
+    - name: Reset pre kubeadm
+      command: kubeadm reset -f
+
+    - name: Initialize Kubernetes Master
+      command: kubeadm init --control-plane-endpoint="{{ vip }}":{{ free_port }} --upload-certs
+      register: kubeadm_init_result
+
+    - name: Save kubeadm join command cp
+      copy:
+        content: "{{ kubeadm_init_result.stdout_lines[-12] }} {{ kubeadm_init_result.stdout_lines[-11] }} {{ kubeadm_init_result.stdout_lines[-10] }}"
+        dest: "/tmp/kubeadm_join_cp.sh"
+      run_once: true
+      when: "'kubeadm join' in kubeadm_init_result.stdout"
+
+    - name: Save kubeadm join command worker
+      copy:
+        content: "{{ kubeadm_init_result.stdout_lines[-2] }} {{ kubeadm_init_result.stdout_lines[-1] }}"
+        dest: "/tmp/kubeadm_join_worker.sh"
+      run_once: true
+      when: "'kubeadm join' in kubeadm_init_result.stdout"
+
+    - name: Save kubeadm join command cp to local machine
+      fetch:
+        src: "/tmp/kubeadm_join_cp.sh"
+        dest: "./kubeadm_join_cp.sh"
+        flat: yes
+      run_once: true
+      when: "'kubeadm join' in kubeadm_init_result.stdout"
+
+    - name: Save kubeadm join command worker to local machine
+      fetch:
+        src: "/tmp/kubeadm_join_worker.sh"
+        dest: "./kubeadm_join_worker.sh"
+        flat: yes
+      run_once: true
+      when: "'kubeadm join' in kubeadm_init_result.stdout"
+
+    - name: Save admin.conf
+      fetch:
+        src: "/etc/kubernetes/admin.conf"
+        dest: "./admin.conf"
+        flat: yes
+      run_once: true
+      when: "'kubeadm join' in kubeadm_init_result.stdout"
+
+    - name: Set KUBECONFIG environment variable
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf"
+
+

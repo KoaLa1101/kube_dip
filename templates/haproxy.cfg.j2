@@ -3,13 +3,13 @@ global
   maxconn 256
 
 defaults
-  mode http
+  mode tcp
   timeout connect 5000ms
   timeout client 50000ms
   timeout server 50000ms
 
 frontend http-in
-  bind {{ virtual_ip }}:9011
+  bind {{ vip }}:{{ free_port }}
   default_backend servers
 
 backend servers

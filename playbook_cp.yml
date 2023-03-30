@@ -5,7 +5,8 @@
   vars:
     k8s_version: "{{ k8s_version }}"
     kube_os: "{{ os }}"
-    virtual_ip: "{{ virtual_ip }}"
+    vip: "{{ vip }}"
+    free_port: 9011
     haproxy_packages:
       - haproxy
     keepalived_packages:
@@ -185,6 +186,9 @@
         src: templates/keepalived.conf.j2
         dest: /etc/keepalived/keepalived.conf
 
+    - name: Allow set external ip in hostname
+      command: sysctl -w net.ipv4.ip_nonlocal_bind=1
+
     - name: Comment out disabled_plugins line in /etc/containerd/config.toml
       lineinfile:
         path: /etc/containerd/config.toml
@@ -205,4 +209,33 @@
         - kubelet
         - haproxy
         - keepalived
+    
+    - name: Add entry to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "34.107.244.51   registry.k8s.io"
+
+    - name: Add hostname to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ ansible_default_ipv4.address }}   {{ ansible_hostname }}"
+    
+    - name: Add DNS servers to /etc/resolv.conf
+      lineinfile:
+        path: /etc/resolv.conf
+        insertbefore: '^nameserver'
+        line: |
+          nameserver 8.8.8.8
+
+    - name: Restart haproxy and keepalived services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      with_items:
+        - haproxy
+        - keepalived
+
+
+
+
 

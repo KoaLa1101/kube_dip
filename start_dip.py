@@ -3,7 +3,7 @@ import sys
 import threading
 
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpinBox, \
-    QComboBox, QFormLayout, QGridLayout, QMessageBox, QProgressBar
+    QComboBox, QFormLayout, QGridLayout, QMessageBox
 
 
 class MainWindow(QWidget):
@@ -34,7 +34,8 @@ class MainWindow(QWidget):
         self.combo_box_os.addItem("Ubuntu")
         self.combo_box_os.addItem("AlmaLinux")
         self.button_confirm_count = QPushButton("Подтвердить количество")
-        self.button_start = QPushButton("Начать")
+        self.button_start = QPushButton("Начать установку пакетов")
+        self.button_init = QPushButton("Инициализация кластера")
 
         # Определение макета
         form_layout = QFormLayout()
@@ -56,6 +57,7 @@ class MainWindow(QWidget):
         vbox_right.addLayout(grid_layout)
         vbox_right.addWidget(self.button_confirm_count)
         vbox_right.addWidget(self.button_start)
+        vbox_right.addWidget(self.button_init)
 
         hbox = QHBoxLayout()
         hbox.addLayout(vbox_left)
@@ -68,6 +70,7 @@ class MainWindow(QWidget):
         self.spin_box_worker.valueChanged.connect(self.show_confirm_button)
         self.button_confirm_count.clicked.connect(self.add_fields)
         self.button_start.clicked.connect(self.start_script)
+        self.button_init.clicked.connect(self.init_k8s)
 
         # Поля для control-plane и worker адресов
         self.cp_fields = []
@@ -120,6 +123,8 @@ class MainWindow(QWidget):
         # Получение введенных IP-адресов, операционной системы и версии Kubernetes
         cp_addresses = [field[1].text() for field in self.cp_fields]
         worker_addresses = [field[1].text() for field in self.worker_fields]
+        if len(worker_addresses) < 1:
+            worker_addresses.append('0.0.0.0')
         version = self.combo_box_version.currentText()
         os = self.combo_box_os.currentText()
         vip = self.line_edit_vip.text()
@@ -143,17 +148,69 @@ class MainWindow(QWidget):
 
         # Запуск скрипта установки пакетов в отдельном потоке
         def run_script():
-            command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
-            subprocess.run(command, shell=True)
-
-            # Вывод всплывающего окна после завершения работы скрипта
-            msg_box = QMessageBox()
-            msg_box.setWindowTitle("Установка завершена")
-            msg_box.setText("Пакеты установлены")
-            msg_box.exec_()
+            try:
+                command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
+                subprocess.run(command, shell=True)
+            except Exception as e:
+                # Display an error message box
+                error_box = QMessageBox()
+                error_box.setWindowTitle("Ошибка")
+                error_box.setText(f"Ошибка: {str(e)}")
+                error_box.setIcon(QMessageBox.Critical)
+                error_box.exec_()
+            else:
+                # Вывод всплывающего окна после завершения работы скрипта
+                msg_box = QMessageBox()
+                msg_box.setWindowTitle("Установка завершена")
+                msg_box.setText("Пакеты установлены")
+                msg_box.exec_()
 
         thread = threading.Thread(target=run_script)
         thread.start()
+        pass
+
+    def init_k8s(self):
+
+        cp_addresses = [field[1].text() for field in self.cp_fields]
+        worker_addresses = [field[1].text() for field in self.worker_fields]
+        if len(cp_addresses) < 1:
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Ошибка")
+            msg_box.setIcon(QMessageBox.Critical)
+            msg_box.setText("Нужен хотя бы 1 control_plane")
+            msg_box.exec_()
+            return 1
+        if len(worker_addresses) < 1:
+            worker_addresses.append('0.0.0.0')
+        vip = self.line_edit_vip.text()
+
+        # Вывод всплывающего окна перед запуском скрипта
+        msg_box2 = QMessageBox()
+        msg_box2.setWindowTitle("Инициализация кластера")
+        msg_box2.setText("Началась инициализация кластера. Ожидайте сообщения о завершении")
+        msg_box2.exec_()
+
+        # Запуск скрипта установки пакетов в отдельном потоке
+        def run_script():
+            try:
+                command = f"bash init_k8s_cluster.sh {','.join(cp_addresses)} {','.join(worker_addresses)} '{vip}'"
+                subprocess.run(command, shell=True)
+            except Exception as e:
+                # Display an error message box
+                error_box = QMessageBox()
+                error_box.setWindowTitle("Ошибка")
+                error_box.setText(f"Ошибка: {str(e)}")
+                error_box.setIcon(QMessageBox.Critical)
+                error_box.exec_()
+            else:
+                # Вывод всплывающего окна после завершения работы скрипта
+                msg_box2 = QMessageBox()
+                msg_box2.setWindowTitle("Инициализация кластера")
+                msg_box2.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
+                msg_box2.exec_()
+            
+        thread2 = threading.Thread(target=run_script)
+        thread2.start()
         pass
 
 

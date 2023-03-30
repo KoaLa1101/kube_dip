@@ -1,0 +1,30 @@
+---
+- name: Join Worker Node
+  hosts: all
+  become: true
+  tasks:
+    - name: Reset pre kubeadm
+      command: kubeadm reset -f
+
+    - name: Copy kubeadm join command
+      copy:
+        src: ./kubeadm_join_worker.sh
+        dest: /tmp/kubeadm_join_worker.sh
+        mode: 0700
+
+    - name: Remove all backslashes from file
+      replace:
+        path: /tmp/kubeadm_join_worker.sh
+        regexp: '\\'
+        replace: ''
+
+    - name: Remove all other char from file
+      replace:
+        path: /tmp/kubeadm_join_worker.sh
+        regexp: '\t'
+        replace: ''
+
+    - name: Join worker node to Kubernetes cluster
+      command: sh -c "$(cat /tmp/kubeadm_join_worker.sh)"
+      args:
+        creates: /etc/kubernetes/kubelet.conf

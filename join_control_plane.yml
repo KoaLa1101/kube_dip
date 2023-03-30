@@ -1,0 +1,47 @@
+---
+- name: Join Control Plane Node
+  hosts: all
+  become: true
+  tasks:
+    - name: Reset pre kubeadm
+      command: kubeadm reset -f
+      
+    - name: Copy kubeadm join command
+      copy:
+        src: ./kubeadm_join_cp.sh
+        dest: /tmp/kubeadm_join_cp.sh
+        mode: 0700
+
+    - name: Remove all backslashes from file
+      replace:
+        path: /tmp/kubeadm_join_cp.sh
+        regexp: '\\'
+        replace: ''
+
+    - name: Remove all other char from file
+      replace:
+        path: /tmp/kubeadm_join_worker.sh
+        regexp: '\t'
+        replace: ''
+
+    - name: Join control plane node to Kubernetes cluster
+      command: sh -c "$(cat /tmp/kubeadm_join_cp.sh)"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+    - name: Create directory for admin.conf
+      file:
+        path: /etc/kubernetes/pki
+        state: directory
+        mode: '0755'
+
+    - name: Fetch admin.conf from Kubernetes master
+      fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: ./admin.conf
+        flat: yes
+      delegate_to: "{{ groups['all'][0] }}"
+      run_once: true
+
+    - name: Set KUBECONFIG environment variable
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf"

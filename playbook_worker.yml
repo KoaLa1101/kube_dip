@@ -177,3 +177,21 @@
         - docker
         - kubelet
 
+    - name: Add entry to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "34.107.244.51   registry.k8s.io"
+    
+    - name: Add hostname to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ ansible_default_ipv4.address }}   {{ ansible_hostname }}"
+
+
+    - name: Add DNS servers to /etc/resolv.conf
+      lineinfile:
+        path: /etc/resolv.conf
+        insertbefore: '^nameserver'
+        line: |
+          nameserver 8.8.8.8
+

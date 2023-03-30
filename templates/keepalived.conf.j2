@@ -11,7 +11,7 @@ vrrp_instance VI_1 {
   advert_int 1
 
   virtual_ipaddress {
-    {{ virtual_ip }}/24 dev eth0
+    {{ vip }} /32 dev {{ ansible_default_ipv4.interface }}
   }
 
   track_script {
