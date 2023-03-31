@@ -191,7 +191,7 @@ class MainWindow(QWidget):
         msg_box2.exec_()
 
         # Запуск скрипта установки пакетов в отдельном потоке
-        def run_script():
+        def run_script2():
             try:
                 command = f"bash init_k8s_cluster.sh {','.join(cp_addresses)} {','.join(worker_addresses)} '{vip}'"
                 subprocess.run(command, shell=True)
@@ -209,7 +209,7 @@ class MainWindow(QWidget):
                 msg_box2.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
                 msg_box2.exec_()
             
-        thread2 = threading.Thread(target=run_script)
+        thread2 = threading.Thread(target=run_script2)
         thread2.start()
         pass
 

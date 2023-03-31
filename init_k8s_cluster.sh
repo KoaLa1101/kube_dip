@@ -24,3 +24,5 @@ if [[ $worker_addresses != "0.0.0.0" ]]; then
     ansible-playbook -i "${ip}," join_worker.yml --become-user=root -v
   done
 fi
+
+ansible-playbook -i "${first_cp_address}," kubectl_works.yml --extra-vars "vip=${vip}" --become-user=root -v

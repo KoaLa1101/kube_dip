@@ -9,7 +9,7 @@
       command: kubeadm reset -f
 
     - name: Initialize Kubernetes Master
-      command: kubeadm init --control-plane-endpoint="{{ vip }}":{{ free_port }} --upload-certs
+      command: kubeadm init --pod-network-cidr=192.168.0.0/16 --control-plane-endpoint="{{ vip }}":{{ free_port }} --upload-certs
       register: kubeadm_init_result
 
     - name: Save kubeadm join command cp
@@ -52,5 +52,22 @@
 
     - name: Set KUBECONFIG environment variable
       shell: "export KUBECONFIG=/etc/kubernetes/admin.conf"
+
+    - name: Creates directory .kube
+      file:
+        path: $HOME/.kube/
+        state: directory
+
+    - name: Copy admin.conf to .kube
+      copy:
+        src: /etc/kubernetes/admin.conf
+        remote_src: true
+        dest: $HOME/.kube/config
+
+    - name: Change kubeconfig file permission
+      file:
+        path: $HOME/.kube/config 
+        owner: "{{ ansible_user_uid}}"
+        group: "{{ ansible_user_gid }}"
 
 

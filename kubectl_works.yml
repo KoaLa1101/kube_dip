@@ -1,0 +1,10 @@
+---
+- name: Kubectl works in cluster
+  hosts: all
+  become: true
+  tasks:
+    - name: Set pod network interface 1
+      shell: 'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/tigera-operator.yaml'
+
+    - name: Set pod network interface 2
+      shell: 'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/custom-resources.yaml'

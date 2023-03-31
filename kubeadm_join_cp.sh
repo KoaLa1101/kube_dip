@@ -1,1 +1,1 @@
-  kubeadm join 172.18.141.125:9011 --token 6d7vbe.x0cjjs4jmar0lz02 \ 	--discovery-token-ca-cert-hash sha256:f881fbac22b4b14e868a94cd072d5620d486bce29c4b3b4126144a40eea6321e \ 	--control-plane --certificate-key 5804bdc7c3346ee47f390282c1111ced211f6dac2882a6c195901720cbb69282
+  kubeadm join 172.18.141.125:9011 --token omrtup.6p0ggvo99dr7uhit \ 	--discovery-token-ca-cert-hash sha256:fdee88e0f457a3821e9f17bb97b9cd302281b006c167baff346c9a9d3fe2e745 \ 	--control-plane --certificate-key 91dab0805e8cf1d41705f1304712af660bf1d14bf6f946a2f4d5cec593d64da4
