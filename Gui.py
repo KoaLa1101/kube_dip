@@ -1,11 +1,16 @@
 import subprocess
 import sys
-
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtGui import QPalette, QColor, QAction, QGuiApplication
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, \
-    QListWidget, QPlainTextEdit, QSplitter, QStyleFactory, QTextEdit, QDialog, QLabel, QLineEdit, QDialogButtonBox
+    QListWidget, QPlainTextEdit, QSplitter, QStyleFactory, QTextEdit, QDialog, QLabel, QLineEdit, QDialogButtonBox, \
+    QMenu
 from kubernetes import client, config
+
+from helpers.DeploymentEditDialog import DeploymentEditDialog
+from helpers.HPAEditDialog import HPAEditDialog
+from helpers.ReplicaSetEditDialog import ReplicaSetEditDialog
+from helpers.StatefulSetEditDialog import StatefulSetEditDialog
 
 
 class KubernetesAdminGUI(QWidget):
@@ -57,9 +62,12 @@ class KubernetesAdminGUI(QWidget):
         # Верхняя правая часть: кнопки действий
         top_right_widget = QWidget()
         top_right_layout = QHBoxLayout()
-        self.edit_button = QPushButton("Изменить")
+        #        self.edit_button = QPushButton("Изменить")
         self.delete_button = QPushButton("Удалить")
-        top_right_layout.addWidget(self.edit_button)
+        # Подключаем контекстное меню
+        self.resource_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.resource_list.customContextMenuRequested.connect(self.show_context_menu)
+        #        top_right_layout.addWidget(self.edit_button)
         top_right_layout.addWidget(self.delete_button)
         top_right_widget.setLayout(top_right_layout)
 
@@ -82,6 +90,11 @@ class KubernetesAdminGUI(QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
 
+        # Устанавливаем размер окна 3/4 экрана
+        screen_geometry = QGuiApplication.screens()[0].availableGeometry()
+        width, height = screen_geometry.width() * 3 // 4, screen_geometry.height() * 3 // 4
+        self.resize(width, height)
+
         # Настраиваем сигналы и слоты
         self.setup_connections()
 
@@ -98,7 +111,7 @@ class KubernetesAdminGUI(QWidget):
         self.resource_items_list.itemClicked.connect(self.display_resource_info)
 
         # Действия над выбранным объектом
-        self.edit_button.clicked.connect(self.edit_resource)
+        #        self.edit_button.clicked.connect(self.show_context_menu)
         self.delete_button.clicked.connect(self.delete_resource)
 
         # Загрузка конфигурации Kubernetes
@@ -376,13 +389,162 @@ class KubernetesAdminGUI(QWidget):
 
         self.info_text.setPlainText(resource_info)
 
-    def edit_resource(self):
-        resource_name = self.resource_items_list.currentItem().text()
+    def show_context_menu(self, position):
         resource_type = self.resource_list.currentItem().text()
+        if resource_type in ["Deployments", "StatefulSets", "ReplicaSets", "HPA"]:
+            context_menu = QMenu(self.resource_list)
+            edit_action = QAction("Изменить")
+            edit_action.triggered.connect(self.edit_resource)
+            context_menu.addAction(edit_action)
+            context_menu.exec(self.resource_list.viewport().mapToGlobal(position))
+
+    def edit_resource(self):
+        resource_type = self.resource_list.currentItem().text()
+
+        if resource_type == "Deployments":
+            self.edit_deployment()
+        elif resource_type == "StatefulSets":
+            self.edit_statefulset()
+        elif resource_type == "ReplicaSets":
+            self.edit_replicaset()
+        elif resource_type == "HPA":
+            self.edit_hpa()
+
+    def edit_deployment(self):
+        selected_item = self.resource_items_list.currentItem()
+        api_instance = client.AppsV1Api()
+        if not selected_item:
+            return
+
+        resource_name = selected_item.text()
         namespace = self.namespace_combo.currentText()
 
-        # TODO: Замените на свою логику изменения объектов ресурса
-        print(f"Edit resource {resource_type}: {resource_name} in namespace {namespace}")
+        # Получение текущих значений Deployment из кластера
+        deployment = api_instance.read_namespaced_deployment(resource_name, namespace)
+        current_image = deployment.spec.template.spec.containers[0].image
+        current_replicas = deployment.spec.replicas
+        current_limits = deployment.spec.template.spec.containers[0].resources.limits
+        current_requests = deployment.spec.template.spec.containers[0].resources.requests
+
+        # Создание и отображение диалога редактирования Deployment
+        dialog = DeploymentEditDialog(self, current_image, current_replicas, current_limits, current_requests)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            # Получение обновленных значений из диалога
+            new_image, new_replicas, new_limits, new_requests = dialog.get_updated_values()
+
+            # Обновление Deployment в кластере
+            deployment.spec.template.spec.containers[0].image = new_image
+            deployment.spec.replicas = new_replicas
+            deployment.spec.template.spec.containers[0].resources.limits = new_limits
+            deployment.spec.template.spec.containers[0].resources.requests = new_requests
+
+            api_instance.patch_namespaced_deployment(resource_name, namespace, deployment)
+
+
+    def edit_statefulset(self):
+        selected_item = self.resource_items_list.currentItem()
+        api_instance = client.AppsV1Api()
+        if not selected_item:
+            return
+
+        resource_name = selected_item.text()
+        namespace = self.namespace_combo.currentText()
+
+        # Получение текущих значений Deployment из кластера
+        statefulset = api_instance.read_namespaced_stateful_set(resource_name, namespace)
+        current_image = statefulset.spec.template.spec.containers[0].image
+        current_replicas = statefulset.spec.replicas
+        current_limits = statefulset.spec.template.spec.containers[0].resources.limits
+        current_requests = statefulset.spec.template.spec.containers[0].resources.requests
+
+        # Создание и отображение диалога редактирования Deployment
+        dialog = StatefulSetEditDialog(self, current_image, current_replicas, current_limits, current_requests)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            # Получение обновленных значений из диалога
+            new_image, new_replicas, new_limits, new_requests = dialog.get_updated_values()
+
+            # Обновление Deployment в кластере
+            statefulset.spec.template.spec.containers[0].image = new_image
+            statefulset.spec.replicas = new_replicas
+            statefulset.spec.template.spec.containers[0].resources.limits = new_limits
+            statefulset.spec.template.spec.containers[0].resources.requests = new_requests
+
+            api_instance.patch_namespaced_stateful_set(resource_name, namespace, statefulset)
+
+    def edit_replicaset(self):
+        selected_item = self.resource_items_list.currentItem()
+        api_instance = client.AppsV1Api()
+        if not selected_item:
+            return
+
+        resource_name = selected_item.text()
+        namespace = self.namespace_combo.currentText()
+
+        # Получение текущих значений Deployment из кластера
+        replicatset = api_instance.read_namespaced_replica_set(resource_name, namespace)
+        current_image = replicatset.spec.template.spec.containers[0].image
+        current_replicas = replicatset.spec.replicas
+        current_limits = replicatset.spec.template.spec.containers[0].resources.limits
+        current_requests = replicatset.spec.template.spec.containers[0].resources.requests
+
+        # Создание и отображение диалога редактирования Deployment
+        dialog = ReplicaSetEditDialog(self, current_image, current_replicas, current_limits, current_requests)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            # Получение обновленных значений из диалога
+            new_image, new_replicas, new_limits, new_requests = dialog.get_updated_values()
+
+            # Обновление Deployment в кластере
+            replicatset.spec.template.spec.containers[0].image = new_image
+            replicatset.spec.replicas = new_replicas
+            replicatset.spec.template.spec.containers[0].resources.limits = new_limits
+            replicatset.spec.template.spec.containers[0].resources.requests = new_requests
+
+            api_instance.patch_namespaced_replica_set(resource_name, namespace, replicatset)
+
+
+    def edit_hpa(self):
+        selected_item = self.resource_items_list.currentItem()
+        api_instance = client.AutoscalingV2Api()
+        if not selected_item:
+            return
+
+        hpa_name = selected_item.text()
+        namespace = self.namespace_combo.currentText()
+
+        # Получить текущий объект HPA
+        hpa = api_instance.read_namespaced_horizontal_pod_autoscaler(hpa_name, namespace)
+
+        # Извлечь текущие значения
+        current_min_replicas = hpa.spec.min_replicas
+        current_max_replicas = hpa.spec.max_replicas
+        current_cpu = hpa.spec.target_cpu_utilization_percentage
+        current_memory = hpa.spec.target_memory_utilization_percentage
+
+        # Создать и показать диалог редактирования HPA
+        dialog = HPAEditDialog(self, current_min_replicas, current_max_replicas, current_cpu, current_memory)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            # Получить обновленные значения из диалога
+            new_min_replicas, new_max_replicas, new_cpu, new_memory = dialog.get_updated_values()
+
+            # Обновить объект HPA с новыми значениями
+            hpa.spec.min_replicas = new_min_replicas
+            hpa.spec.max_replicas = new_max_replicas
+            hpa.spec.target_cpu_utilization_percentage = new_cpu
+            hpa.spec.target_memory_utilization_percentage = new_memory
+
+            # Сохранить изменения
+            api_instance.patch_namespaced_horizontal_pod_autoscaler(hpa_name, namespace, hpa)
+
+            # Обновить информацию на экране
+            self.load_resource_items(self.resource_list.currentItem())
 
     def delete_resource(self):
         resource_name = self.resource_items_list.currentItem().text()
@@ -418,3 +580,5 @@ if __name__ == "__main__":
     gui = KubernetesAdminGUI()
     gui.show()
     sys.exit(app.exec())
+
+
