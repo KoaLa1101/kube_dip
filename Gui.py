@@ -1,18 +1,16 @@
-import sys
-import os
 import subprocess
+import sys
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, \
+    QListWidget, QPlainTextEdit, QSplitter, QStyleFactory, QTextEdit, QDialog, QLabel, QLineEdit, QDialogButtonBox
 from kubernetes import client, config
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QComboBox, QPushButton, \
-    QListWidget, QPlainTextEdit, QLabel, QSizePolicy
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QStyleFactory
-from PyQt5.QtGui import QPalette, QColor
 
 
 class KubernetesAdminGUI(QWidget):
     def __init__(self):
         super().__init__()
-
         self.init_ui()
 
     def init_ui(self):
@@ -75,7 +73,7 @@ class KubernetesAdminGUI(QWidget):
         right_widget.setLayout(right_layout)
 
         # Разделение окна на три части с использованием QSplitter
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(left_widget)
         splitter.addWidget(center_widget)
         splitter.addWidget(right_widget)
@@ -131,7 +129,7 @@ class KubernetesAdminGUI(QWidget):
             "ConfigMaps",
             "Secrets",
             "ReplicaSets",
-            "HorizontalPodAutoscalers",
+            "HPA",
             "Services",
             "Ingresses",
         ]
@@ -145,19 +143,19 @@ class KubernetesAdminGUI(QWidget):
     def set_dark_theme(self):
         dark_palette = QPalette()
 
-        dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.WindowText, Qt.white)
-        dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
-        dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ToolTipBase, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ToolTipText, Qt.white)
-        dark_palette.setColor(QPalette.Text, Qt.white)
-        dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ButtonText, Qt.white)
-        dark_palette.setColor(QPalette.BrightText, Qt.red)
-        dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+        dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
 
         QApplication.setStyle(QStyleFactory.create("Fusion"))
         QApplication.setPalette(dark_palette)
@@ -168,6 +166,7 @@ class KubernetesAdminGUI(QWidget):
         subprocess.run(["bash", bash_script_path])
 
     def load_resource_items(self, item):
+        global resources
         resource_type = item.text()
         api = client.CoreV1Api()
 
@@ -177,123 +176,205 @@ class KubernetesAdminGUI(QWidget):
         elif resource_type == "Deployments":
             api = client.AppsV1Api()
             resources = api.list_namespaced_deployment(namespace=self.namespace_combo.currentText())
+        elif resource_type == "StatefulSets":
+            api = client.AppsV1Api()
+            resources = api.list_namespaced_stateful_set(namespace=self.namespace_combo.currentText())
+        elif resource_type == "DaemonSets":
+            api = client.AppsV1Api()
+            resources = api.list_namespaced_daemon_set(namespace=self.namespace_combo.currentText())
+        elif resource_type == "ReplicaSets":
+            api = client.AppsV1Api()
+            resources = api.list_namespaced_replica_set(namespace=self.namespace_combo.currentText())
+        elif resource_type == "CronJobs":
+            api = api = client.BatchV1Api()
+            resources = api.list_namespaced_cron_job(namespace=self.namespace_combo.currentText())
+        elif resource_type == "Jobs":
+            api = client.BatchV1Api()
+            resources = api.list_namespaced_job(namespace=self.namespace_combo.currentText())
+        elif resource_type == "HPA":
+            api = client.AutoscalingV2Api()
+            resources = api.list_namespaced_horizontal_pod_autoscaler(namespace=self.namespace_combo.currentText())
+        elif resource_type == "Ingresses":
+            api = client.NetworkingV1Api()
+            resources = api.list_namespaced_ingress(namespace=self.namespace_combo.currentText())
+        elif resource_type == "Services":
+            resources = api.list_namespaced_service(namespace=self.namespace_combo.currentText())
         elif resource_type == "PersistentVolumes":
             resources = api.list_persistent_volume()
+        elif resource_type == "PersistentVolumeClaims":
+            resources = api.list_namespaced_persistent_volume_claim(namespace=self.namespace_combo.currentText())
+        elif resource_type == "ConfigMaps":
+            resources = api.list_namespaced_config_map(namespace=self.namespace_combo.currentText())
+        elif resource_type == "Secrets":
+            resources = api.list_namespaced_secret(namespace=self.namespace_combo.currentText())
+        elif resource_type == "StorageClasses":
+            api = client.StorageV1Api()
+            resources = api.list_namespaced_csi_storage_capacity(namespace=self.namespace_combo.currentText())
 
         for resource in resources.items:
             self.resource_items_list.addItem(resource.metadata.name)
 
-    def display_resource_info(self, item):
-        resource_name = item.text()
-        resource_type = self.resource_list.currentItem().text()
+    def display_resource_info(self):
+        selected_item = self.resource_items_list.currentItem()
+        if not selected_item:
+            return
+
+        resource_name = selected_item.text()
         namespace = self.namespace_combo.currentText()
+        resource_type = self.resource_list.currentItem().text()
+
+        config.load_kube_config('admin.conf')
+        api_instance = client.CoreV1Api()
+
+        resource_info = ""
+
+        if resource_type in ["Deployments", "StatefulSets", "DaemonSets", "ReplicaSets", "CronJobs"]:
+            api_instance = client.AppsV1Api()
+        elif resource_type in ["HPA"]:
+            api_instance = client.AutoscalingV1Api()
+        elif resource_type in ["Ingresses"]:
+            api_instance = client.NetworkingV1Api()
+        elif resource_type in ["StorageClasses"]:
+            api_instance = client.StorageV1Api()
 
         if resource_type == "Pods":
-            resource_info = self.get_pod_info(namespace, resource_name)
+            pod = api_instance.read_namespaced_pod(resource_name, namespace)
+
+            creation_timestamp = pod.metadata.creation_timestamp
+            status = pod.status.phase
+            containers = pod.spec.containers
+
+            resource_info += f"Pod info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nStatus: {status}\n\nContainers:\n"
+
+            for container in containers:
+                name = container.name
+                image = container.image
+                ports = container.ports if container.ports else []
+
+                resource_info += f"\nName: {name}\nImage: {image}\nPorts: {', '.join([f'{p.container_port}/{p.protocol}' for p in ports])}\n"
+
         elif resource_type == "Deployments":
-            resource_info = self.get_deployment_info(namespace, resource_name)
-        elif resource_type == "StatefulSets":
-            resource_info = self.get_stateful_set_info(namespace, resource_name)
-        elif resource_type == "DaemonSets":
-            resource_info = self.get_daemon_set_info(namespace, resource_name)
-        elif resource_type == "PersistentVolumes":
-            resource_info = self.get_pv_info(resource_name)
-        elif resource_type == "PersistentVolumeClaims":
-            resource_info = self.get_pvc_info(namespace, resource_name)
-        elif resource_type == "ConfigMaps":
-            resource_info = self.get_config_map_info(namespace, resource_name)
-        elif resource_type == "Secrets":
-            resource_info = self.get_secret_info(namespace, resource_name)
-        elif resource_type == "CronJobs":
-            resource_info = self.get_cron_job_info(namespace, resource_name)
-        elif resource_type == "Jobs":
-            resource_info = self.get_job_info(namespace, resource_name)
-        elif resource_type == "ReplicaSets":
-            resource_info = self.get_replica_set_info(namespace, resource_name)
-        elif resource_type == "HorizontalPodAutoscalers":
-            resource_info = self.get_hpa_info(namespace, resource_name)
+            deployment = api_instance.read_namespaced_deployment(resource_name, namespace)
+
+            creation_timestamp = deployment.metadata.creation_timestamp
+            replicas = deployment.spec.replicas
+            available_replicas = deployment.status.available_replicas
+            container = deployment.spec.template.spec.containers[0]
+            image = container.image
+
+            resource_info += f"Deployment info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nReplicas: {replicas}\nAvailable Replicas: {available_replicas}\nImage: {image}\n"
+
         elif resource_type == "Services":
-            resource_info = self.get_service_info(namespace, resource_name)
+            service = api_instance.read_namespaced_service(resource_name, namespace)
+
+            creation_timestamp = service.metadata.creation_timestamp
+            cluster_ip = service.spec.cluster_ip
+            ports = service.spec.ports
+
+            resource_info += f"Service info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nCluster IP: {cluster_ip}\n\nPorts:\n"
+
+            for port in ports:
+                resource_info += f"\nPort: {port.port}, Target Port: {port.target_port}\n"
+
+        elif resource_type == "StatefulSets":
+            statefulset = api_instance.read_namespaced_stateful_set(resource_name, namespace)
+
+            creation_timestamp = statefulset.metadata.creation_timestamp
+            replicas = statefulset.spec.replicas
+            container = statefulset.spec.template.spec.containers[0]
+            image = container.image
+
+            resource_info += f"StatefulSet info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nReplicas: {replicas}\nImage: {image}\n"
+
+        elif resource_type == "DaemonSets":
+            daemonset = api_instance.read_namespaced_daemon_set(resource_name, namespace)
+
+            creation_timestamp = daemonset.metadata.creation_timestamp
+            desired_number_scheduled = daemonset.status.desired_number_scheduled
+            container = daemonset.spec.template.spec.containers[0]
+            image = container.image
+
+            resource_info += f"DaemonSet info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nDesired Number Scheduled: {desired_number_scheduled}\nImage: {image}\n"
+
+        elif resource_type == "PersistentVolumeClaims":
+            pvc = api_instance.read_namespaced_persistent_volume_claim(resource_name, namespace)
+
+            creation_timestamp = pvc.metadata.creation_timestamp
+            status = pvc.status.phase
+            access_modes = pvc.spec.access_modes
+            storage_class_name = pvc.spec.storage_class_name
+
+            resource_info += f"PVC info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nStatus: {status}\nAccess Modes: {access_modes}\nStorage Class: {storage_class_name}\n"
+
+        elif resource_type == "ConfigMaps":
+            config_map = api_instance.read_namespaced_config_map(resource_name, namespace)
+
+            creation_timestamp = config_map.metadata.creation_timestamp
+            data = config_map.data
+
+            resource_info += f"ConfigMap info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nData:\n\n{data}\n"
+
+        elif resource_type == "Secrets":
+            secret = api_instance.read_namespaced_secret(resource_name, namespace)
+
+            creation_timestamp = secret.metadata.creation_timestamp
+            secret_type = secret.type
+
+            resource_info += f"Secret info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nType: {secret_type}\n"
+
+        elif resource_type == "CronJobs":
+            api_instance = client.BatchV1beta1Api()
+            cron_job = api_instance.read_namespaced_cron_job(resource_name, namespace)
+
+            creation_timestamp = cron_job.metadata.creation_timestamp
+            schedule = cron_job.spec.schedule
+            job_template = cron_job.spec.job_template
+
+            resource_info += f"CronJob info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nSchedule: {schedule}\nJob Template:\n\n{job_template}\n"
+
+        elif resource_type == "ReplicaSets":
+            replica_set = api_instance.read_namespaced_replica_set(resource_name, namespace)
+
+            creation_timestamp = replica_set.metadata.creation_timestamp
+            replicas = replica_set.spec.replicas
+            container = replica_set.spec.template.spec.containers[0]
+            image = container.image
+
+            resource_info += f"ReplicaSet info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nReplicas: {replicas}\nImage: {image}\n"
+
+        elif resource_type == "HPA":
+            hpa = api_instance.read_namespaced_horizontal_pod_autoscaler(resource_name, namespace)
+
+            creation_timestamp = hpa.metadata.creation_timestamp
+            min_replicas = hpa.spec.min_replicas
+            max_replicas = hpa.spec.max_replicas
+
+            resource_info += f"HPA info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nMin Replicas: {min_replicas}\nMax Replicas: {max_replicas}\n"
+
         elif resource_type == "Ingresses":
-            resource_info = self.get_ingress_info(namespace, resource_name)
+            ingress = api_instance.read_namespaced_ingress(resource_name, namespace)
+
+            creation_timestamp = ingress.metadata.creation_timestamp
+            rules = ingress.spec.rules
+
+            resource_info += f"Ingress info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\nRules:\n"
+
+            for rule in rules:
+                resource_info += f"\nHost: {rule.host}\n"
+                for path in rule.http.paths:
+                    resource_info += f"Path: {path.path}, Backend: {path.backend.service.name}:{path.backend.service.port.name}\n"
+
         elif resource_type == "StorageClasses":
-            resource_info = self.get_sc_info(namespace, resource_name)
-        else:
-            resource_info = "Неизвестный тип ресурса"
+            api_instance = client.StorageV1Api()
+            storage_class = api_instance.read_storage_class(resource_name)
+
+            creation_timestamp = storage_class.metadata.creation_timestamp
+            provisioner = storage_class.provisioner
+            parameters = storage_class.parameters
+
+            resource_info += f"StorageClass info:\n\nName: {resource_name}\n\nCreation time: {creation_timestamp}\nProvisioner: {provisioner}\nParameters: {parameters}\n"
 
         self.info_text.setPlainText(resource_info)
-
-    def get_pod_info(self, namespace, pod_name):
-        api = client.CoreV1Api()
-        pod = api.read_namespaced_pod(namespace=namespace, name=pod_name)
-        return f"Pod info:\n\nName: {pod.metadata.name}\nNamespace: {pod.metadata.namespace}\n\n{pod}"
-
-    def get_deployment_info(self, namespace, deployment_name):
-        api = client.AppsV1Api()
-        deployment = api.read_namespaced_deployment(namespace=namespace, name=deployment_name)
-        return f"Deployment info:\n\nName: {deployment.metadata.name}\nNamespace: {deployment.metadata.namespace}\n\n{deployment}"
-
-    def get_pv_info(self, pv_name):
-        api = client.CoreV1Api()
-        pv = api.read_persistent_volume(name=pv_name)
-        return f"PersistentVolume info:\n\nName: {pv.metadata.name}\n\n{pv}"
-
-    def get_stateful_set_info(self, namespace, stateful_set_name):
-        api = client.AppsV1Api()
-        stateful_set = api.read_namespaced_stateful_set(namespace=namespace, name=stateful_set_name)
-        return f"StatefulSet info:\n\nName: {stateful_set.metadata.name}\nNamespace: {stateful_set.metadata.namespace}\n\n{stateful_set}"
-
-    def get_daemon_set_info(self, namespace, daemon_set_name):
-        api = client.AppsV1Api()
-        daemon_set = api.read_namespaced_daemon_set(namespace=namespace, name=daemon_set_name)
-        return f"DaemonSet info:\n\nName: {daemon_set.metadata.name}\nNamespace: {daemon_set.metadata.namespace}\n\n{daemon_set}"
-
-    def get_replica_set_info(self, namespace, replica_set_name):
-        api = client.AppsV1Api()
-        replica_set = api.read_namespaced_replica_set(namespace=namespace, name=replica_set_name)
-        return f"ReplicaSet info:\n\nName: {replica_set.metadata.name}\nNamespace: {replica_set.metadata.namespace}\n\n{replica_set}"
-
-    def get_pvc_info(self, namespace, pvc_name):
-        api = client.CoreV1Api()
-        pvc = api.read_namespaced_persistent_volume_claim(namespace=namespace, name=pvc_name)
-        return f"PersistentVolumeClaims info:\n\nName: {pvc.metadata.name}\nNamespace: {pvc.metadata.namespace}\n\n{pvc}"
-
-    def get_config_map_info(self, namespace, config_map_name):
-        api = client.CoreV1Api()
-        config_map = api.read_namespaced_config_map(namespace=namespace, name=config_map_name)
-        return f"ConfigMaps info:\n\nName: {config_map.metadata.name}\nNamespace: {config_map.metadata.namespace}\n\n{config_map}"
-
-    def get_secret_info(self, namespace, secret_name):
-        api = client.CoreV1Api()
-        secret = api.read_namespaced_secret(namespace=namespace, name=secret_name)
-        return f"Secrets info:\n\nName: {secret.metadata.name}\nNamespace: {secret.metadata.namespace}\n\n{secret}"
-
-    def get_cron_job_info(self, namespace, cron_job_name):
-        api = client.BatchV1Api()
-        cron_job = api.read_namespaced_cron_job(namespace=namespace, name=cron_job_name)
-        return f"CronJobs info:\n\nName: {cron_job.metadata.name}\nNamespace: {cron_job.metadata.namespace}\n\n{cron_job}"
-
-
-    def get_job_info(self, namespace, job_name):
-        api = client.BatchV1Api()
-        job = api.read_namespaced_job(namespace=namespace, name=job_name)
-        return f"Jobs info:\n\nName: {job.metadata.name}\nNamespace: {job.metadata.namespace}\n\n{job}"
-
-    def get_hpa_info(self, namespace, hpa_name):
-        api = client.AutoscalingV2Api
-        hpa = api.read_namespaced_horizontal_pod_autoscaler(namespace=namespace, name=hpa_name)
-        return f"HPA info:\n\nName: {hpa.metadata.name}\nNamespace: {hpa.metadata.namespace}\n\n{hpa}"
-
-    def get_service_info(self, namespace, service_name):
-        api = client.CoreV1Api
-        service = api.read_namespaced_service(namespace=namespace, name=service_name)
-        return f"Service info:\n\nName: {service.metadata.name}\nNamespace: {service.metadata.namespace}\n\n{service}"
-
-    def get_sc_info(self, namespace, sc_name):
-        api = client.StorageV1Api
-        sc = api.read_namespaced_csi_storage_capacity(namespace=namespace, name=sc_name)
-        return f"StorageClasses info:\n\nName: {sc.metadata.name}\nNamespace: {sc.metadata.namespace}\n\n{sc}"
-
 
     def edit_resource(self):
         resource_name = self.resource_items_list.currentItem().text()
@@ -336,4 +417,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     gui = KubernetesAdminGUI()
     gui.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
