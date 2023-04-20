@@ -1,16 +1,65 @@
 import subprocess
 import sys
+
+import paramiko
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QColor, QAction, QGuiApplication
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, \
-    QListWidget, QPlainTextEdit, QSplitter, QStyleFactory, QTextEdit, QDialog, QLabel, QLineEdit, QDialogButtonBox, \
-    QMenu
+    QListWidget, QPlainTextEdit, QSplitter, QStyleFactory, QDialog, QMenu
+from PyQt6.QtWidgets import QMessageBox
 from kubernetes import client, config
 
+from helpers.AddNodeDialog import AddNodeDialog
 from helpers.DeploymentEditDialog import DeploymentEditDialog
 from helpers.HPAEditDialog import HPAEditDialog
 from helpers.ReplicaSetEditDialog import ReplicaSetEditDialog
 from helpers.StatefulSetEditDialog import StatefulSetEditDialog
+
+
+def get_master_ip():
+    api = client.CoreV1Api()
+    nodes = api.list_node()
+    control_plane_ips = []
+
+    for node in nodes.items:
+        if "node-role.kubernetes.io/control-plane" in node.metadata.labels:
+            for address in node.status.addresses:
+                if address.type == "InternalIP":
+                    control_plane_ips.append(address.address)
+
+    return control_plane_ips
+
+
+def get_kubeadm_join_command():
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        ssh.connect(get_master_ip()[0])
+        stdin, stdout, stderr = ssh.exec_command('sudo kubeadm token create --print-join-command')
+        join_command = stdout.read().decode().strip()
+
+        f = open("add_node_command.sh", "w")
+        f.write(join_command)
+        f.close()
+        return join_command
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+    finally:
+        ssh.close()
+
+
+def get_k8s_version():
+    api = client.CoreV1Api()
+    nodes = api.list_node()
+    k8s_version = None
+
+    for node in nodes.items:
+        if "node-role.kubernetes.io/control-plane" in node.metadata.labels:
+            k8s_version = node.status.node_info.kubelet_version
+
+    return k8s_version
 
 
 class KubernetesAdminGUI(QWidget):
@@ -174,9 +223,23 @@ class KubernetesAdminGUI(QWidget):
         QApplication.setPalette(dark_palette)
 
     def add_node(self):
-        # Замените "your_script.sh" на путь к вашему bash скрипту для добавления ноды
-        bash_script_path = "your_script.sh"
-        subprocess.run(["bash", bash_script_path])
+        get_kubeadm_join_command()
+        dialog = AddNodeDialog(self)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            ip_address = dialog.get_ip_address()
+            self.run_add_node_script(ip_address)
+
+    def run_add_node_script(self, ip_address):
+        try:
+            command = f"bash add_node.sh {ip_address} {get_k8s_version()}"
+            subprocess.run(command, shell=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка",
+                                 f"Не удалось добавить ноду с IP-адресом: {ip_address}")
+        else:
+            QMessageBox.information(self, "Успех", f"Нода успешно добавлена с IP-адресом: {ip_address}")
 
     def load_resource_items(self, item):
         global resources
@@ -199,7 +262,7 @@ class KubernetesAdminGUI(QWidget):
             api = client.AppsV1Api()
             resources = api.list_namespaced_replica_set(namespace=self.namespace_combo.currentText())
         elif resource_type == "CronJobs":
-            api = api = client.BatchV1Api()
+            api = client.BatchV1Api()
             resources = api.list_namespaced_cron_job(namespace=self.namespace_combo.currentText())
         elif resource_type == "Jobs":
             api = client.BatchV1Api()
@@ -442,7 +505,6 @@ class KubernetesAdminGUI(QWidget):
 
             api_instance.patch_namespaced_deployment(resource_name, namespace, deployment)
 
-
     def edit_statefulset(self):
         selected_item = self.resource_items_list.currentItem()
         api_instance = client.AppsV1Api()
@@ -507,7 +569,6 @@ class KubernetesAdminGUI(QWidget):
 
             api_instance.patch_namespaced_replica_set(resource_name, namespace, replicatset)
 
-
     def edit_hpa(self):
         selected_item = self.resource_items_list.currentItem()
         api_instance = client.AutoscalingV2Api()
@@ -555,6 +616,30 @@ class KubernetesAdminGUI(QWidget):
             self.delete_pod(namespace, resource_name)
         elif resource_type == "Deployments":
             self.delete_deployment(namespace, resource_name)
+        elif resource_type == "StatefulSets":
+            self.delete_statefulset(namespace, resource_name)
+        elif resource_type == "DaemonSets":
+            self.delete_daemonset(namespace, resource_name)
+        elif resource_type == "CronJobs":
+            self.delete_cronjob(namespace, resource_name)
+        elif resource_type == "Jobs":
+            self.delete_job(namespace, resource_name)
+        elif resource_type == "ConfigMaps":
+            self.delete_configmap(namespace, resource_name)
+        elif resource_type == "Secrets":
+            self.delete_secret(namespace, resource_name)
+        elif resource_type == "ReplicaSets":
+            self.delete_replicaset(namespace, resource_name)
+        elif resource_type == "HPA":
+            self.delete_hpa(namespace, resource_name)
+        elif resource_type == "Services":
+            self.delete_service(namespace, resource_name)
+        elif resource_type == "Ingresses":
+            self.delete_ingress(namespace, resource_name)
+        elif resource_type == "StorageClasses":
+            self.delete_sc(namespace, resource_name)
+        elif resource_type == "PersistentVolumeClaims":
+            self.delete_pvc(namespace, resource_name)
         elif resource_type == "PersistentVolumes":
             self.delete_pv(resource_name)
         else:
@@ -570,6 +655,54 @@ class KubernetesAdminGUI(QWidget):
         api = client.AppsV1Api()
         api.delete_namespaced_deployment(namespace=namespace, name=deployment_name)
 
+    def delete_statefulset(self, namespace, statefulset_name):
+        api = client.AppsV1Api()
+        api.delete_namespaced_stateful_set(namespace=namespace, name=statefulset_name)
+
+    def delete_replicaset(self, namespace, replicaset_name):
+        api = client.AppsV1Api()
+        api.delete_namespaced_replica_set(namespace=namespace, name=replicaset_name)
+
+    def delete_daemonset(self, namespace, daemonset_name):
+        api = client.AppsV1Api()
+        api.delete_namespaced_daemon_set(namespace=namespace, name=daemonset_name)
+
+    def delete_cronjob(self, namespace, cronjob_name):
+        api = client.BatchV1Api()
+        api.delete_namespaced_cron_job(namespace=namespace, name=cronjob_name)
+
+    def delete_job(self, namespace, job_name):
+        api = client.BatchV1Api()
+        api.delete_namespaced_job(namespace=namespace, name=job_name)
+
+    def delete_ingress(self, namespace, ingress_name):
+        api = client.NetworkingV1Api()
+        api.delete_namespaced_ingress(namespace=namespace, name=ingress_name)
+
+    def delete_service(self, namespace, service_name):
+        api = client.CoreV1Api()
+        api.delete_namespaced_service(namespace=namespace, name=service_name)
+
+    def delete_configmap(self, namespace, configmap_name):
+        api = client.CoreV1Api()
+        api.delete_namespaced_config_map(namespace=namespace, name=configmap_name)
+
+    def delete_secret(self, namespace, secret_name):
+        api = client.CoreV1Api()
+        api.delete_namespaced_secret(namespace=namespace, name=secret_name)
+
+    def delete_sc(self, namespace, sc_name):
+        api = client.StorageV1Api()
+        api.delete_namespaced_csi_storage_capacity(namespace=namespace, name=sc_name)
+
+    def delete_hpa(self, namespace, pvc_name):
+        api = client.AutoscalingV2Api()
+        api.delete_namespaced_horizontal_pod_autoscaler(namespace=namespace, name=pvc_name)
+
+    def delete_pvc(self, namespace, pvc_name):
+        api = client.CoreV1Api()
+        api.delete_namespaced_persistent_volume_claim(namespace=namespace, name=pvc_name)
+
     def delete_pv(self, pv_name):
         api = client.CoreV1Api()
         api.delete_persistent_volume(name=pv_name)
@@ -580,5 +713,3 @@ if __name__ == "__main__":
     gui = KubernetesAdminGUI()
     gui.show()
     sys.exit(app.exec())
-
-

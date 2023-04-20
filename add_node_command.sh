@@ -1,0 +1,1 @@
+kubeadm join 172.18.141.125:9011 --token s0bkn2.76narncfl0cfr73r --discovery-token-ca-cert-hash sha256:fdee88e0f457a3821e9f17bb97b9cd302281b006c167baff346c9a9d3fe2e745
