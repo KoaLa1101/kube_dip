@@ -1,8 +1,6 @@
-import subprocess
 import sys
-import threading
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpinBox, \
     QComboBox, QFormLayout, QGridLayout, QMessageBox

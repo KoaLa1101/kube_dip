@@ -1,9 +1,10 @@
-import sys
 import os
 import subprocess
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QLabel, QWidget, QMessageBox
+import sys
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QLabel, QWidget, QMessageBox
 
 
 class MainWindow(QMainWindow):
