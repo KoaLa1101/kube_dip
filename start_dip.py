@@ -2,10 +2,12 @@ import subprocess
 import sys
 import threading
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpinBox, \
     QComboBox, QFormLayout, QGridLayout, QMessageBox
+
+from helpers.ScriptThread import ScriptThread
 
 
 class MainWindow(QWidget):
@@ -147,28 +149,10 @@ class MainWindow(QWidget):
         msg_box.setText("Началась загрузка пакетов. Ожидайте сообщения о завершении")
         msg_box.exec()
 
-        # Запуск скрипта установки пакетов в отдельном потоке
-        def run_script():
-            try:
-                command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
-                subprocess.run(command, shell=True)
-            except Exception as e:
-                # Display an error message box
-                error_box = QMessageBox()
-                error_box.setWindowTitle("Ошибка")
-                error_box.setText(f"Ошибка: {str(e)}")
-                error_box.setIcon(QMessageBox.Icon.Critical)
-                error_box.exec()
-            else:
-                # Вывод всплывающего окна после завершения работы скрипта
-                msg_box = QMessageBox()
-                msg_box.setWindowTitle("Установка завершена")
-                msg_box.setText("Пакеты установлены")
-                msg_box.exec()
-
-        thread = threading.Thread(target=run_script)
-        thread.start()
-        pass
+        command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
+        self.script_thread = ScriptThread(command)
+        self.script_thread.finished.connect(self.on_script_finished)
+        self.script_thread.start()
 
     def init_k8s(self):
 
@@ -191,28 +175,23 @@ class MainWindow(QWidget):
         msg_box.setText("Началась инициализация кластера. Ожидайте сообщения о завершении")
         msg_box.exec()
 
-        # Запуск скрипта установки пакетов в отдельном потоке
-        def run_script2():
-            try:
-                command = f"bash init_k8s_cluster.sh {','.join(cp_addresses)} {','.join(worker_addresses)} '{vip}'"
-                subprocess.run(command, shell=True)
-            except Exception as e:
-                # Display an error message box
-                error_box = QMessageBox()
-                error_box.setWindowTitle("Ошибка")
-                error_box.setText(f"Ошибка: {str(e)}")
-                error_box.setIcon(QMessageBox.Icon.Critical)
-                error_box.exec()
-            else:
-                # Вывод всплывающего окна после завершения работы скрипта
-                msg_box = QMessageBox()
-                msg_box.setWindowTitle("Инициализация кластера")
-                msg_box.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
-                msg_box.exec()
+        command = f"bash init_k8s_cluster.sh {','.join(cp_addresses)} {','.join(worker_addresses)} '{vip}'"
+        self.script_thread = ScriptThread(command)
+        self.script_thread.finished.connect(self.on_script_finished)
+        self.script_thread.start()
 
-        thread = threading.Thread(target=run_script2)
-        thread.start()
-        pass
+    def on_script_finished(self):
+        if self.script_thread.error_message is not None:
+            error_box = QMessageBox()
+            error_box.setWindowTitle("Ошибка")
+            error_box.setText(self.script_thread.error_message)
+            error_box.setIcon(QMessageBox.Icon.Critical)
+            error_box.exec()
+        else:
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Инициализация кластера")
+            msg_box.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
+            msg_box.exec()
 
 
 if __name__ == "__main__":
