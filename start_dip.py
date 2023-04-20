@@ -2,7 +2,9 @@ import subprocess
 import sys
 import threading
 
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpinBox, \
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpinBox, \
     QComboBox, QFormLayout, QGridLayout, QMessageBox
 
 
@@ -99,16 +101,15 @@ class MainWindow(QWidget):
 
         # Создание полей для control-plane адресов
         for i in range(len(self.cp_fields), cp_count):
-            label = QLabel(f"Control-plane адрес {i+1}")
+            label = QLabel(f"Control-plane адрес {i + 1}")
             line_edit = QLineEdit()
             self.cp_fields.append((label, line_edit))
 
         # Создание полей для worker адресов
         for i in range(len(self.worker_fields), worker_count):
-            label = QLabel(f"Worker адрес {i+1}")
+            label = QLabel(f"Worker адрес {i + 1}")
             line_edit = QLineEdit()
             self.worker_fields.append((label, line_edit))
-
 
         # Обновление макета
         layout_left = self.layout().itemAt(0).layout()
@@ -144,7 +145,7 @@ class MainWindow(QWidget):
         msg_box = QMessageBox()
         msg_box.setWindowTitle("Загрузка пакетов")
         msg_box.setText("Началась загрузка пакетов. Ожидайте сообщения о завершении")
-        msg_box.exec_()
+        msg_box.exec()
 
         # Запуск скрипта установки пакетов в отдельном потоке
         def run_script():
@@ -156,14 +157,14 @@ class MainWindow(QWidget):
                 error_box = QMessageBox()
                 error_box.setWindowTitle("Ошибка")
                 error_box.setText(f"Ошибка: {str(e)}")
-                error_box.setIcon(QMessageBox.Critical)
-                error_box.exec_()
+                error_box.setIcon(QMessageBox.Icon.Critical)
+                error_box.exec()
             else:
                 # Вывод всплывающего окна после завершения работы скрипта
                 msg_box = QMessageBox()
                 msg_box.setWindowTitle("Установка завершена")
                 msg_box.setText("Пакеты установлены")
-                msg_box.exec_()
+                msg_box.exec()
 
         thread = threading.Thread(target=run_script)
         thread.start()
@@ -176,19 +177,19 @@ class MainWindow(QWidget):
         if len(cp_addresses) < 1:
             msg_box = QMessageBox()
             msg_box.setWindowTitle("Ошибка")
-            msg_box.setIcon(QMessageBox.Critical)
+            msg_box.setIcon(QMessageBox.Icon.Critical)
             msg_box.setText("Нужен хотя бы 1 control_plane")
-            msg_box.exec_()
+            msg_box.exec()
             return 1
         if len(worker_addresses) < 1:
             worker_addresses.append('0.0.0.0')
         vip = self.line_edit_vip.text()
 
         # Вывод всплывающего окна перед запуском скрипта
-        msg_box2 = QMessageBox()
-        msg_box2.setWindowTitle("Инициализация кластера")
-        msg_box2.setText("Началась инициализация кластера. Ожидайте сообщения о завершении")
-        msg_box2.exec_()
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Инициализация кластера")
+        msg_box.setText("Началась инициализация кластера. Ожидайте сообщения о завершении")
+        msg_box.exec()
 
         # Запуск скрипта установки пакетов в отдельном потоке
         def run_script2():
@@ -200,23 +201,43 @@ class MainWindow(QWidget):
                 error_box = QMessageBox()
                 error_box.setWindowTitle("Ошибка")
                 error_box.setText(f"Ошибка: {str(e)}")
-                error_box.setIcon(QMessageBox.Critical)
-                error_box.exec_()
+                error_box.setIcon(QMessageBox.Icon.Critical)
+                error_box.exec()
             else:
                 # Вывод всплывающего окна после завершения работы скрипта
-                msg_box2 = QMessageBox()
-                msg_box2.setWindowTitle("Инициализация кластера")
-                msg_box2.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
-                msg_box2.exec_()
-            
-        thread2 = threading.Thread(target=run_script2)
-        thread2.start()
+                msg_box = QMessageBox()
+                msg_box.setWindowTitle("Инициализация кластера")
+                msg_box.setText("Инициализация завершена. admin.conf находится в директории этого проекта")
+                msg_box.exec()
+
+        thread = threading.Thread(target=run_script2)
+        thread.start()
         pass
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Настройка темной темы
+    app.setStyle("Fusion")
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+    dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+    dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+    app.setPalette(dark_palette)
+    app.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; }")
+
     window = MainWindow()
     window.setGeometry(500, 300, 800, 200)
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

@@ -1,1 +1,1 @@
-kubeadm join 172.18.141.125:9011 --token omrtup.6p0ggvo99dr7uhit \ 	--discovery-token-ca-cert-hash sha256:fdee88e0f457a3821e9f17bb97b9cd302281b006c167baff346c9a9d3fe2e745 
+kubeadm join 172.18.141.125:9011 --token n4bodc.1zldd89akgbwimad \ 	--discovery-token-ca-cert-hash sha256:e0dedbc08e0d7fa1ff2705661de25057ed7447519d062de535a44a1f45ae5e05 
