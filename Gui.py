@@ -13,6 +13,7 @@ from helpers.AddNodeDialog import AddNodeDialog
 from helpers.DeploymentEditDialog import DeploymentEditDialog
 from helpers.HPAEditDialog import HPAEditDialog
 from helpers.ReplicaSetEditDialog import ReplicaSetEditDialog
+from helpers.ScriptThread import ScriptThread
 from helpers.StatefulSetEditDialog import StatefulSetEditDialog
 
 
@@ -179,6 +180,7 @@ class KubernetesAdminGUI(QWidget):
     def load_resource_types(self):
         self.resource_list.clear()
         resource_types = [
+            "Nodes",
             "Pods",
             "Deployments",
             "StatefulSets",
@@ -232,14 +234,24 @@ class KubernetesAdminGUI(QWidget):
             self.run_add_node_script(ip_address)
 
     def run_add_node_script(self, ip_address):
-        try:
-            command = f"bash add_node.sh {ip_address} {get_k8s_version()}"
-            subprocess.run(command, shell=True)
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка",
-                                 f"Не удалось добавить ноду с IP-адресом: {ip_address}")
+        command = f"bash add_node.sh {ip_address} {get_k8s_version()}"
+        self.script_thread = ScriptThread(command)
+        self.script_thread.finished.connect(self.on_script_finished)
+        self.script_thread.start()
+
+    def on_script_finished(self):
+        if self.script_thread.error_message is not None:
+            error_box = QMessageBox()
+            error_box.setWindowTitle("Ошибка")
+            error_box.setText(self.script_thread.error_message)
+            error_box.setIcon(QMessageBox.Icon.Critical)
+            error_box.exec()
         else:
-            QMessageBox.information(self, "Успех", f"Нода успешно добавлена с IP-адресом: {ip_address}")
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Добавление ноды ")
+            msg_box.setText("Нода добавлена в кластер")
+            msg_box.exec()
+
 
     def load_resource_items(self, item):
         global resources
@@ -249,6 +261,8 @@ class KubernetesAdminGUI(QWidget):
         self.resource_items_list.clear()
         if resource_type == "Pods":
             resources = api.list_namespaced_pod(namespace=self.namespace_combo.currentText())
+        elif resource_type == "Nodes":
+            resources = api.list_node()
         elif resource_type == "Deployments":
             api = client.AppsV1Api()
             resources = api.list_namespaced_deployment(namespace=self.namespace_combo.currentText())
@@ -439,6 +453,15 @@ class KubernetesAdminGUI(QWidget):
                 resource_info += f"\nHost: {rule.host}\n"
                 for path in rule.http.paths:
                     resource_info += f"Path: {path.path}, Backend: {path.backend.service.name}:{path.backend.service.port.name}\n"
+        elif resource_type == "Nodes":
+            status = 'Not Ready'
+            node = api_instance.read_node(resource_name)
+            creation_timestamp = node.metadata.creation_timestamp
+            for condition in node.status.conditions:
+                if condition.type == 'Ready':
+                    status = 'Ready'
+
+            resource_info += f"Ingress info:\n\nName: {resource_name}\nNamespace: {namespace}\n\nCreation time: {creation_timestamp}\n\nStatus :  {status}"
 
         elif resource_type == "StorageClasses":
             api_instance = client.StorageV1Api()

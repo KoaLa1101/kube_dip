@@ -1,1 +1,1 @@
-kubeadm join 172.18.141.125:9011 --token ltwb85.4bo2kl6g8rzfhdmc --discovery-token-ca-cert-hash sha256:3764bec3c3030919e0b8fbd34b2b5382644c057da8f4441aba232abfce811f7c
+kubeadm join 172.18.141.125:9011 --token pusakx.tgwa1nyyozoot7hl --discovery-token-ca-cert-hash sha256:5610ac29de05a6c0e5b5317bfa57505dee9e720f199e0c8379a67df31194eee4

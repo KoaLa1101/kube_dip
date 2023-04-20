@@ -20,7 +20,7 @@
 
     - name: Remove all other char from file
       replace:
-        path: /tmp/kubeadm_join_worker.sh
+        path: /tmp/kubeadm_join_cp.sh
         regexp: '\t'
         replace: ''
 

@@ -149,7 +149,7 @@ class MainWindow(QWidget):
 
         command = f"bash install_kubernetes.sh {','.join(cp_addresses)} {','.join(worker_addresses)} {version} '{os}' '{vip}'"
         self.script_thread = ScriptThread(command)
-        self.script_thread.finished.connect(self.on_script_finished)
+        self.script_thread.finished.connect(self.on_script_finished_packet)
         self.script_thread.start()
 
     def init_k8s(self):
@@ -178,7 +178,21 @@ class MainWindow(QWidget):
         self.script_thread.finished.connect(self.on_script_finished)
         self.script_thread.start()
 
+    def on_script_finished_packet(self):
+        if self.script_thread.error_message is not None:
+            error_box = QMessageBox()
+            error_box.setWindowTitle("Ошибка")
+            error_box.setText(self.script_thread.error_message)
+            error_box.setIcon(QMessageBox.Icon.Critical)
+            error_box.exec()
+        else:
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Инициализация кластера")
+            msg_box.setText("Пакеты успешно установлены..")
+            msg_box.exec()
+
     def on_script_finished(self):
+        print("on_script_finished_packet called")
         if self.script_thread.error_message is not None:
             error_box = QMessageBox()
             error_box.setWindowTitle("Ошибка")

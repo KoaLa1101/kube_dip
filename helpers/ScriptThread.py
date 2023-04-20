@@ -14,7 +14,5 @@ class ScriptThread(QThread):
         except Exception as e:
             # Вывод всплывающего окна с сообщением об ошибке
             self.error_message = f"Ошибка: {str(e)}"
-            self.finished.emit()
         else:
             self.error_message = None
-            self.finished.emit()
